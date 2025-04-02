@@ -17,37 +17,6 @@ class MegaETHFaucetBot:
         self.anti_captcha_key = os.getenv('ANTI_CAPTCHA_KEY')
         self.target_address = os.getenv('TARGET_ADDRESS')
         self.wallets = []
-        self.hcaptcha_site_key = None
-        
-    def get_hcaptcha_site_key(self):
-        """Sayfadan HCaptcha site key'ini al"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
-            }
-            response = requests.get('https://testnet.megaeth.com', headers=headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # HCaptcha iframe'ini bul
-            iframe = soup.find('iframe', {'data-hcaptcha-widget-id': True})
-            if iframe and 'data-sitekey' in iframe.attrs:
-                self.hcaptcha_site_key = iframe['data-sitekey']
-                print(f"HCaptcha site key bulundu: {self.hcaptcha_site_key}")
-                return True
-                
-            # Alternatif arama yöntemi
-            script_tags = soup.find_all('script')
-            for script in script_tags:
-                if script.string and 'hcaptcha' in script.string.lower():
-                    matches = re.findall(r'sitekey:\s*[\'"]([^\'"]+)[\'"]', script.string)
-                    if matches:
-                        self.hcaptcha_site_key = matches[0]
-                        print(f"HCaptcha site key bulundu: {self.hcaptcha_site_key}")
-                        return True
-                        
-        except Exception as e:
-            print(f"Site key alınamadı: {str(e)}")
-        return False
         
     def create_wallets(self, count):
         """Belirtilen sayıda yeni wallet oluştur"""
@@ -66,14 +35,10 @@ class MegaETHFaucetBot:
             
     def solve_captcha(self):
         """Anti-Captcha ile HCaptcha çözümü"""
-        if not self.hcaptcha_site_key:
-            if not self.get_hcaptcha_site_key():
-                raise Exception("HCaptcha site key alınamadı!")
-        
         client = AnticaptchaClient(self.anti_captcha_key)
         task = HCaptchaTaskProxyless(
             website_url="https://testnet.megaeth.com",
-            website_key=self.hcaptcha_site_key
+            website_key="4c672d35-0701-42b2-88c3-78380b0db560"  # MegaETH'in HCaptcha site key'i
         )
         job = client.createTask(task)
         print("Captcha çözülüyor...")
@@ -104,7 +69,7 @@ class MegaETHFaucetBot:
             
             data = {
                 'address': wallet_address,
-                'h_captcha_response': captcha_token
+                'h-captcha-response': captcha_token  # parametre adı güncellendi
             }
             
             response = requests.post(
@@ -169,11 +134,6 @@ class MegaETHFaucetBot:
             
         if not self.target_address:
             print("HATA: TARGET_ADDRESS bulunamadı. Lütfen .env dosyasını kontrol edin.")
-            return
-        
-        # HCaptcha site key'ini al
-        if not self.get_hcaptcha_site_key():
-            print("HATA: HCaptcha site key alınamadı!")
             return
         
         # Yeni walletler oluştur
