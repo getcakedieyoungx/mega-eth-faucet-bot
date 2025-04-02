@@ -6,6 +6,8 @@ from eth_account import Account
 from dotenv import load_dotenv
 import requests
 from python_anticaptcha import AnticaptchaClient, HCaptchaTaskProxyless
+import re
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -15,6 +17,37 @@ class MegaETHFaucetBot:
         self.anti_captcha_key = os.getenv('ANTI_CAPTCHA_KEY')
         self.target_address = os.getenv('TARGET_ADDRESS')
         self.wallets = []
+        self.hcaptcha_site_key = None
+        
+    def get_hcaptcha_site_key(self):
+        """Sayfadan HCaptcha site key'ini al"""
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
+            }
+            response = requests.get('https://testnet.megaeth.com', headers=headers)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # HCaptcha iframe'ini bul
+            iframe = soup.find('iframe', {'data-hcaptcha-widget-id': True})
+            if iframe and 'data-sitekey' in iframe.attrs:
+                self.hcaptcha_site_key = iframe['data-sitekey']
+                print(f"HCaptcha site key bulundu: {self.hcaptcha_site_key}")
+                return True
+                
+            # Alternatif arama yöntemi
+            script_tags = soup.find_all('script')
+            for script in script_tags:
+                if script.string and 'hcaptcha' in script.string.lower():
+                    matches = re.findall(r'sitekey:\s*[\'"]([^\'"]+)[\'"]', script.string)
+                    if matches:
+                        self.hcaptcha_site_key = matches[0]
+                        print(f"HCaptcha site key bulundu: {self.hcaptcha_site_key}")
+                        return True
+                        
+        except Exception as e:
+            print(f"Site key alınamadı: {str(e)}")
+        return False
         
     def create_wallets(self, count):
         """Belirtilen sayıda yeni wallet oluştur"""
@@ -32,11 +65,15 @@ class MegaETHFaucetBot:
             json.dump(self.wallets, f, indent=4)
             
     def solve_captcha(self):
-        """Anti-Captcha ile Cloudflare captcha çözümü"""
+        """Anti-Captcha ile HCaptcha çözümü"""
+        if not self.hcaptcha_site_key:
+            if not self.get_hcaptcha_site_key():
+                raise Exception("HCaptcha site key alınamadı!")
+        
         client = AnticaptchaClient(self.anti_captcha_key)
         task = HCaptchaTaskProxyless(
             website_url="https://testnet.megaeth.com",
-            website_key="0x4aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # Cloudflare HCaptcha site key
+            website_key=self.hcaptcha_site_key
         )
         job = client.createTask(task)
         print("Captcha çözülüyor...")
@@ -49,7 +86,7 @@ class MegaETHFaucetBot:
             'authority': 'carrot.megaeth.com',
             'accept': '*/*',
             'accept-language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-            'content-type': 'text/plain;charset=UTF-8',
+            'content-type': 'application/json',
             'origin': 'https://testnet.megaeth.com',
             'referer': 'https://testnet.megaeth.com/',
             'sec-ch-ua': '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
@@ -67,7 +104,7 @@ class MegaETHFaucetBot:
             
             data = {
                 'address': wallet_address,
-                'captcha_token': captcha_token
+                'h_captcha_response': captcha_token
             }
             
             response = requests.post(
@@ -75,6 +112,8 @@ class MegaETHFaucetBot:
                 headers=headers,
                 json=data
             )
+            
+            print(f"Faucet yanıtı: {response.text}")
             
             if response.status_code == 200:
                 print(f"Faucet başarıyla talep edildi: {response.json()}")
@@ -92,12 +131,15 @@ class MegaETHFaucetBot:
         try:
             nonce = self.w3.eth.get_transaction_count(from_wallet['address'])
             
+            gas_price = self.w3.eth.gas_price
+            gas_limit = 21000
+            
             transaction = {
                 'nonce': nonce,
                 'to': self.target_address,
                 'value': self.w3.to_wei(amount, 'ether'),
-                'gas': 21000,
-                'gasPrice': self.w3.eth.gas_price,
+                'gas': gas_limit,
+                'gasPrice': gas_price,
                 'chainId': 42069  # MegaETH Testnet Chain ID
             }
             
@@ -129,6 +171,11 @@ class MegaETHFaucetBot:
             print("HATA: TARGET_ADDRESS bulunamadı. Lütfen .env dosyasını kontrol edin.")
             return
         
+        # HCaptcha site key'ini al
+        if not self.get_hcaptcha_site_key():
+            print("HATA: HCaptcha site key alınamadı!")
+            return
+        
         # Yeni walletler oluştur
         self.create_wallets(wallet_count)
         
@@ -153,7 +200,7 @@ class MegaETHFaucetBot:
                     if balance > 0:
                         print(f"Transfer yapılıyor: {wallet['address']} -> {self.target_address}")
                         # Gas için biraz ETH bırak
-                        transfer_amount = balance_eth - 0.001
+                        transfer_amount = float(balance_eth) - 0.001
                         if transfer_amount > 0:
                             transfer_result = self.transfer_eth(wallet, transfer_amount)
                             if transfer_result:
