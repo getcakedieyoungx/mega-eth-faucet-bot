@@ -1,7 +1,6 @@
 web3==6.15.1
-python-anticaptcha==1.0.0
+anticaptchaofficial==1.0.56
 python-dotenv==1.0.1
 requests==2.31.0
 eth-account==0.10.0
 setuptools>=65.5.1
-beautifulsoup4==4.12.3
