@@ -37,7 +37,7 @@ class MegaETHFaucetBot:
         solver.set_verbose(1)
         solver.set_key(self.anti_captcha_key)
         solver.set_website_url("https://testnet.megaeth.com")
-        solver.set_website_key("0x4AAAAAABA4JXCaw9E2Py-9")  # Doğru Turnstile site key
+        solver.set_website_key("0x4AAAAAABA4JXCaw9E2Py-9")
         
         print("Captcha çözülüyor...")
         token = solver.solve_and_return_solution()
@@ -53,7 +53,7 @@ class MegaETHFaucetBot:
         """Faucet'ten ETH talep et"""
         session = requests.Session()
         
-        # İlk olarak ana sayfayı ziyaret et ve çerezleri al
+        # İlk olarak ana sayfayı ziyaret et
         session.get('https://testnet.megaeth.com')
         
         headers = {
@@ -79,7 +79,7 @@ class MegaETHFaucetBot:
             
             data = {
                 'address': wallet_address,
-                'cf-turnstile-response': captcha_token
+                'turnstile-response': captcha_token  # Parametre adı güncellendi
             }
             
             response = session.post(
