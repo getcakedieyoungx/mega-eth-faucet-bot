@@ -37,7 +37,7 @@ class MegaETHFaucetBot:
         solver.set_verbose(1)
         solver.set_key(self.anti_captcha_key)
         solver.set_website_url("https://testnet.megaeth.com")
-        solver.set_website_key("0x4AAAAAAAHHhHHHhHHHhHHH")  # Cloudflare Turnstile site key
+        solver.set_website_key("0x4AAAAAABA4JXCaw9E2Py-9")  # Doğru Turnstile site key
         
         print("Captcha çözülüyor...")
         token = solver.solve_and_return_solution()
@@ -51,6 +51,11 @@ class MegaETHFaucetBot:
         
     def claim_faucet(self, wallet_address):
         """Faucet'ten ETH talep et"""
+        session = requests.Session()
+        
+        # İlk olarak ana sayfayı ziyaret et ve çerezleri al
+        session.get('https://testnet.megaeth.com')
+        
         headers = {
             'authority': 'carrot.megaeth.com',
             'accept': '*/*',
@@ -68,10 +73,6 @@ class MegaETHFaucetBot:
         }
         
         try:
-            # Önce sayfayı ziyaret et
-            session = requests.Session()
-            session.get('https://testnet.megaeth.com')
-            
             captcha_token = self.solve_captcha()
             if not captcha_token:
                 return None
