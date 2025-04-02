@@ -5,9 +5,7 @@ from web3 import Web3
 from eth_account import Account
 from dotenv import load_dotenv
 import requests
-from python_anticaptcha import AnticaptchaClient, HCaptchaTaskProxyless
-import re
-from bs4 import BeautifulSoup
+from anticaptchaofficial.turnstileproxyless import turnstileProxyless
 
 load_dotenv()
 
@@ -34,16 +32,22 @@ class MegaETHFaucetBot:
             json.dump(self.wallets, f, indent=4)
             
     def solve_captcha(self):
-        """Anti-Captcha ile HCaptcha çözümü"""
-        client = AnticaptchaClient(self.anti_captcha_key)
-        task = HCaptchaTaskProxyless(
-            website_url="https://testnet.megaeth.com",
-            website_key="4c672d35-0701-42b2-88c3-78380b0db560"  # MegaETH'in HCaptcha site key'i
-        )
-        job = client.createTask(task)
+        """Anti-Captcha ile Turnstile captcha çözümü"""
+        solver = turnstileProxyless()
+        solver.set_verbose(1)
+        solver.set_key(self.anti_captcha_key)
+        solver.set_website_url("https://testnet.megaeth.com")
+        solver.set_website_key("0x4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")  # Turnstile site key
+        
         print("Captcha çözülüyor...")
-        job.join(maximum_time=120)
-        return job.get_solution_response()
+        token = solver.solve_and_return_solution()
+        
+        if token != 0:
+            print(f"Captcha çözüldü: {token[:30]}...")
+            return token
+        else:
+            print(f"Captcha çözülemedi: {solver.error_code}")
+            return None
         
     def claim_faucet(self, wallet_address):
         """Faucet'ten ETH talep et"""
@@ -65,11 +69,12 @@ class MegaETHFaucetBot:
         
         try:
             captcha_token = self.solve_captcha()
-            print(f"Captcha çözüldü: {captcha_token[:30]}...")
+            if not captcha_token:
+                return None
             
             data = {
                 'address': wallet_address,
-                'h-captcha-response': captcha_token  # parametre adı güncellendi
+                'cf-turnstile-response': captcha_token  # Turnstile için doğru parametre adı
             }
             
             response = requests.post(
